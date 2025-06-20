@@ -1,0 +1,27 @@
+---
+layout: default
+title: test
+description: empty env
+prototype: true
+---
+
+<style>
+.preview {
+    max-width: 1200px;
+    min-height: 320px;
+    padding: 0;
+}
+
+canvas {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+}
+</style>
+
+<canvas id="three-canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>claimed modal - success interaction</title>
+    <meta name="description" content="success interaction">
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <script src="https://kit.fontawesome.com/53df3a2a07.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <main class="prototype">
+        <header>
+            <nav>
+                
+                    <a href="/" class="button"><i class="fa-solid fa-arrow-left"></i></a>
+                
+                <h1>
+                    claimed modal
+                </h1>
+            </nav>
+            
+        </header>
+
+        
+            <div class="preview">
+                <style>
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
+
+.view {
+    font-family: "Rubik", sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 520px;
+    max-width: 375px;
+    width: 100%;
+    background: black;
+    color: #0F172A;
+    font-weight: 500;
+    overflow: hidden;
+    position: relative;
+}
+.modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: white;
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
+    z-index: 3;
+}
+
+.modal .modal-header, .modal .modal-footer, .modal .modal-content {
+    display: flex;
+    width: 100%;
+    padding: 0.75rem;
+}
+
+.modal .modal-header {
+    justify-content: space-between;
+    align-items: center;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.modal .modal-header i {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.modal .modal-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.modal .modal-content section {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.modal .modal-content section svg {
+    height: 1.5rem;
+    width: 1.5rem;
+}
+
+.modal .modal-content figure {
+    width: 4rem;
+    height: 4rem;
+    background: black;
+    border-radius: 999px;
+    position: relative;
+}
+
+.modal .modal-content figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.modal .modal-content span {
+	font-weight: 700;
+}
+
+.modal .modal-footer {
+	justify-content: center;
+}
+
+.modal .modal-footer figure {
+    width: 25%;
+    height: 0.25rem;
+    background: black;
+    border-radius: 999px;
+}
+
+#replay {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.5rem 1rem;
+    background: black;
+    color: #fff;
+    border: 0;
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+    z-index: 9999;
+}
+
+.checkmark {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: white;
+    border-radius: 9999px;
+}
+
+.ripple-burst {
+    position: fixed;
+    width: 0px;
+    height: 0px;
+    background: radial-gradient(circle at center, transparent 0%, #10b981 100%);
+    border: 1rem solid white;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    animation: burst-anim 1s ease-out forwards;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.full-burst {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
+    background: radial-gradient(circle at center, #01b3ff 0%, transparent 70%), radial-gradient(circle at center, #01b3ff 0%, transparent 40%);
+    animation: full-burst-anim 0.5s ease-out forwards;
+}
+
+.sweep-glow {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent 40%, rgba(1, 179, 255, 0.2) 50%, transparent 60%);
+    animation: sweep-glow-anim 1s ease-out forwards;
+    z-index: 2;
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
+    pointer-events: none;
+}
+
+@keyframes burst-anim {
+    to {
+        width: 10rem;
+        height: 10rem;
+        opacity: 0;
+    }
+}
+
+@keyframes full-burst-anim {
+        0% {
+            opacity: 1;
+            transform: scale(0.6);
+    }
+        100% {
+            opacity: 0;
+            transform: scale(3.4);
+    }
+}
+
+@keyframes sweep-glow-anim {
+        to {
+            left: 100%;
+    }
+}
+ 
+</style>
+
+<div class="view">
+    <div class="modal">
+        <div class="modal-header">
+        <i></i>
+        <p>Rewards</p>
+        <i class="fa-solid fa-circle-xmark"></i>
+        </div>
+        <div class="modal-content">
+        <figure>
+            <img src="https://mms.businesswire.com/media/20231213314816/en/1847719/4/Worldcoin_logo.jpg">
+            <div class="checkmark">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><style>
+    @keyframes a0_t { 0% { transform: translate(12px,12px) rotate(-360deg) scale(.8,.8) translate(-11px,-11px); } 75% { transform: translate(12px,12px) rotate(-360deg) scale(.8,.8) translate(-11px,-11px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { transform: translate(12px,12px) rotate(-360deg) scale(1,1) translate(-11px,-11px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 91.667% { transform: translate(12px,12px) rotate(-360deg) scale(.9,.9) translate(-11px,-11px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 100% { transform: translate(12px,12px) rotate(-360deg) scale(1,1) translate(-11px,-11px); } }
+    @keyframes a1_t { 0% { transform: translate(11px,11px) rotate(-360deg); animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { transform: translate(11px,11px) rotate(0deg); } 100% { transform: translate(11px,11px) rotate(0deg); } }
+    @keyframes a1_f { 0% { fill: rgba(16,185,129,0.00); } 58.333% { fill: rgba(16,185,129,0.00); animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { fill: #10b981; } 100% { fill: #10b981; } }
+    @keyframes a1_do { 0% { stroke-dashoffset: 68.7px; animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { stroke-dashoffset: 0px; } 100% { stroke-dashoffset: 0px; } }
+    @keyframes a2_t { 0% { transform: translate(11px,11px) rotate(-360deg) scale(0,0) translate(-5px,1px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 66.667% { transform: translate(11px,11px) rotate(-360deg) scale(1.1,1.1) translate(-5px,1px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 75% { transform: translate(11px,11px) rotate(-360deg) scale(.9,.9) translate(-5px,1px); animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { transform: translate(11px,11px) rotate(-360deg) scale(1,1) translate(-5px,1px); } 100% { transform: translate(11px,11px) rotate(-360deg) scale(1,1) translate(-5px,1px); } }
+    @keyframes a2_s { 0% { stroke: #10b981; } 66.667% { stroke: #10b981; animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { stroke: #fff; } 100% { stroke: #fff; } }
+    @keyframes a2_do { 0% { stroke-dashoffset: 22.1px; } 41.667% { stroke-dashoffset: 22.1px; animation-timing-function: cubic-bezier(.4,0,.6,1); } 83.333% { stroke-dashoffset: 0px; } 100% { stroke-dashoffset: 0px; } }
+    @keyframes a2_d { 0% { d: path('M0,-0.6L4.2,3L10,-5'); } 58.333% { d: path('M0,-0.6L4.2,3L10,-5'); } 83.333% { d: path('M0,-0.6L4.2,3L10,-5'); } 100% { d: path('M0,-0.6L4.2,3L10,-5'); } }
+    </style><g transform="translate(12,12) rotate(-360) scale(.8,.8) translate(-11,-11)" style="animation: 1.2s linear both a0_t;"><ellipse rx="11" ry="11" fill="rgba(16,185,129,0.00)" stroke="#10b981" stroke-width="2" stroke-dasharray="68.7" stroke-dashoffset="68.7" stroke-linecap="round" transform="translate(11,11) rotate(-360)" style="animation: 1.2s linear both a1_t, 1.2s linear both a1_f, 1.2s linear both a1_do;"/><path d="M0-0.6l4.2 3.6l5.8-8" fill="none" stroke-linecap="round" stroke="#10b981" stroke-width="2" stroke-linejoin="round" stroke-dasharray="22.1" stroke-dashoffset="22.1" transform="translate(11,11) rotate(-360) scale(0,0) translate(-5,1)" style="animation: 1.2s linear both a2_t, 1.2s linear both a2_s, 1.2s linear both a2_do, 1.2s linear both a2_d;"/></g></svg>
+            </div>
+        </figure>
+        <section>
+            <p>Claimed <span>2.5 WLD</span></p>
+        </section>
+        </div>
+        <div class="modal-footer">
+        <figure></figure>
+        </div>
+    </div>
+</div>
+
+<button id="replay">Replay</button>
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('replay');
+
+  function playRippleEffect() {
+    const ripple = document.createElement('div');
+    ripple.className = 'ripple-burst';
+    document.body.appendChild(ripple);
+
+    const target = document.querySelector('.checkmark');
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      ripple.style.left = `${rect.left + rect.width / 2}px`;
+      ripple.style.top = `${rect.top + rect.height / 2}px`;
+    }
+
+    setTimeout(() => ripple.remove(), 1000);
+  }
+
+  function playFullViewBurst() {
+    const burst = document.createElement('div');
+    burst.className = 'full-burst';
+
+    const shine = document.createElement('div');
+    shine.className = 'sweep-glow';
+
+    const view = document.querySelector('.view');
+    if (view) {
+      view.appendChild(burst);
+      view.appendChild(shine);
+    }
+
+    setTimeout(() => burst.remove(), 800);
+    setTimeout(() => shine.remove(), 800);
+  }
+
+  function replayAnimation() {
+    const svg = document.querySelector('svg');
+    if (!svg) return;
+    const clone = svg.cloneNode(true);
+    svg.parentNode.replaceChild(clone, svg);
+    playRippleEffect();
+    playFullViewBurst();
+  }
+
+  playRippleEffect();
+  playFullViewBurst();
+
+  btn.addEventListener('click', replayAnimation);
+});
+</script>
+  
+            </div>
+        
+    </main>
+
+    
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-355V4GHGSF"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-355V4GHGSF');
+    </script>
+</body>
+</html> 

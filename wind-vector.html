@@ -1,0 +1,1973 @@
+---
+layout: default
+title: wind vector
+description: 3d wind demo
+prototype: true
+---
+<style>
+.preview {
+    max-width: 1200px;
+    min-height: 320px;
+    padding: 0;
+}
+
+/* Add styles for date/time navigation */
+.date-nav-container, .time-nav-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.date-nav-container .dg .c input[type="text"],
+.time-nav-container .dg .c input[type="text"] {
+  width: 100% !important;
+  text-align: center;
+}
+
+.date-nav-container .dg .c .property-name,
+.time-nav-container .dg .c .property-name {
+  width: 100% !important;
+}
+
+.nav-button {
+  background: #303030;
+  border: 1px solid #505050;
+  color: #fff;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 2px;
+}
+
+.nav-button:hover {
+  background: #404040;
+}
+
+.time-nav-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+canvas {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+}
+
+#mini-map-container {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: max(20px, env(safe-area-inset-left));
+  width: 200px;
+  height: 200px;
+  min-width: 150px;
+  min-height: 150px;
+  max-width: 400px;
+  max-height: 400px;
+  border: 4px solid white;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  box-shadow: 0 0 2rem 0 white;
+  resize: both;
+  overflow: hidden;
+}
+
+.mini-map-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 16px solid #00ddff;
+  transform-origin: center bottom;
+  pointer-events: none;
+  z-index: 15;
+  filter: drop-shadow(0 0 4px rgba(0, 255, 255, 0.6));
+  transition: transform 0.1s ease;
+}
+
+#mini-map-container.visible {
+  opacity: 1;
+}
+
+#mini-map-canvas {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: block;
+}
+
+#mini-map-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(45deg, transparent 30%, white 30%, white 40%, transparent 40%, transparent 60%, white 60%, white 70%, transparent 70%);
+  cursor: se-resize;
+  pointer-events: auto;
+  border-top-right-radius: 4px;
+}
+
+  @media (max-width: 768px) {
+  #mini-map-container {
+    width: 150px;
+    height: 150px;
+    bottom: max(15px, env(safe-area-inset-bottom));
+    left: max(15px, env(safe-area-inset-left));
+    min-width: 120px;
+    min-height: 120px;
+    max-width: 300px;
+    max-height: 300px;
+  }
+  
+  #mini-map-resize-handle {
+    width: 16px;
+    height: 16px;
+    }
+}
+
+#tooltip {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid white;
+  box-shadow: 0 0 20px white;
+}
+</style>
+
+<canvas id="three-canvas"></canvas>
+<div id="mini-map-container">
+  <canvas id="mini-map-canvas"></canvas>
+  <div id="mini-map-resize-handle"></div>
+</div>
+
+<!-- Hidden Leaflet map for texture generation -->
+<div id="leaflet-map" style="width: 512px; height: 512px; position: absolute; top: -1000px; left: -1000px; visibility: hidden;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// === CONSTANTS ===
+const CONSTANTS = {
+  GRID: {
+    SIZE: 10,
+    RANGE: 9,
+    SPACING: 2,
+    VERTICAL_SCALE: 2
+  },
+  FLIGHT_LEVELS: {
+    MIN: 50,
+    MAX: 500,
+    INCREMENT: 50,
+    COUNT: 10
+  },
+  COLORS: {
+    WIND_SPEED: {
+      CALM: 0x00AA00,
+      LIGHT: 0x66FF66,
+      MODERATE: 0xFFFF00,
+      STRONG: 0xFF8800,
+      VERY_STRONG: 0xFF0000
+    },
+    HURRICANE: {
+      EYE: 0x87CEEB,
+      EYEWALL: 0xFF00FF,
+      EYEWALL_INTENSE: 0x8B0000
+    },
+    ARROW: 0x00ddff,
+    BACKGROUND: {
+      DARK: 0x000000,
+      LIGHT: 0xffffff
+    }
+  },
+  HURRICANE: {
+    CATEGORY_WINDS: [0, 74, 96, 111, 131, 157],
+    EYE_BASE_RADIUS: 0.5,
+    EYE_RADIUS_SCALE: 0.2,
+    EYEWALL_OFFSET: 0.8,
+    SPIRAL_BASE_RADIUS: 8,
+    SPIRAL_RADIUS_SCALE: 2
+  },
+  WIND_SPEED: {
+    THRESHOLDS: [20, 35, 50, 65],
+    BASE_ALTITUDE_FACTOR: 2.5,
+    MIN: 5,
+    MAX: 100
+  },
+  ANIMATION: {
+    OSCILLATION_SPEED: 1.5,
+    OSCILLATION_AMPLITUDE: 0.03,
+    MINI_MAP_OSCILLATION: 2
+  },
+  MAP: {
+    TEXTURE_SIZE: 512,
+    GROUND_SIZE: 20
+  }
+};
+
+// === STATE MANAGEMENT ===
+const AppState = {
+  // 3D Scene objects
+  scene: null,
+  camera: null,
+  renderer: null,
+  controls: null,
+  
+  // Wind visualization
+  windCubes: [],
+  windArrows: [],
+  groundPlane: null,
+  arrowGeometry: null,
+  arrowMaterial: null,
+  
+  // Interaction
+  raycaster: new THREE.Raycaster(),
+  mouse: new THREE.Vector2(),
+  isHovering: false,
+  selectedFlightLevel: null,
+  selectedCubes: [],
+  isDragging: false,
+  mouseDownPosition: { x: 0, y: 0 },
+  
+  // GUI and UI
+  gui: null,
+  tooltip: null,
+  
+  // Mini map
+  miniMap: {
+    scene: null,
+    camera: null,
+    renderer: null,
+    canvas: null,
+    container: null,
+    groundPlane: null,
+    cubes: [],
+    arrows: [],
+    isResizing: false,
+    resizeStartSize: { width: 0, height: 0 },
+    resizeStartMouse: { x: 0, y: 0 }
+  },
+  
+  // Leaflet map
+  leafletMap: null,
+  mapCanvas: null,
+  mapContext: null,
+  mapTexture: null,
+  
+  // Time controls
+  currentDate: new Date(),
+  currentTime: {
+    hour: new Date().getHours(),
+    minute: new Date().getMinutes()
+  }
+};
+
+// === CONFIGURATION ===
+const Config = {
+  regions: {
+    'Northeast': {
+      bounds: [[39.0, -80.0], [45.0, -67.0]],
+      center: [42.0, -73.5],
+      zoom: 6,
+      windPattern: 'nor_easter'
+    },
+    'Southeast': {
+      bounds: [[25.0, -87.0], [35.0, -75.0]],
+      center: [30.0, -81.0],
+      zoom: 6,
+      windPattern: 'gulf_stream'
+    },
+    'Midwest': {
+      bounds: [[40.0, -93.0], [49.0, -80.0]],
+      center: [44.5, -86.5],
+      zoom: 6,
+      windPattern: 'continental'
+    },
+    'Southwest': {
+      bounds: [[31.0, -118.0], [37.0, -103.0]],
+      center: [34.0, -110.5],
+      zoom: 6,
+      windPattern: 'desert'
+    },
+    'Northwest': {
+      bounds: [[42.0, -125.0], [49.0, -110.0]],
+      center: [45.5, -117.5],
+      zoom: 6,
+      windPattern: 'pacific'
+    },
+    'Great Plains': {
+      bounds: [[36.0, -105.0], [49.0, -90.0]],
+      center: [42.5, -97.5],
+      zoom: 6,
+      windPattern: 'plains'
+    }
+  },
+
+  settings: {
+    region: 'Southeast',
+    cubeOpacity: 0.03,
+    mapStyle: 'OpenStreetMap',
+    darkBackground: true,
+    showWindArrows: false,
+    currentDate: 'Oct 15, 2024',
+    currentTime: '14:00',
+    thunderstormActive: false,
+    thunderstormPosition: { x: 0, z: 0 },
+    hurricaneActive: false,
+    hurricanePosition: { x: 0, z: 0 },
+    hurricaneIntensity: 3
+  }
+};
+
+// === UTILITY FUNCTIONS ===
+const Utils = {
+  formatDate(date) {
+    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  },
+
+  formatTime(timeObj) {
+    const hour = timeObj.hour.toString().padStart(2, '0');
+    const minute = timeObj.minute.toString().padStart(2, '0');
+    return `${hour}:${minute}`;
+  },
+
+  getWindSpeedColor(speed, stormType = null, distanceFromCenter = Infinity, isStormCore = false) {
+    if (stormType === 'hurricane') {
+      const { EYE_BASE_RADIUS, EYE_RADIUS_SCALE, EYEWALL_OFFSET, SPIRAL_BASE_RADIUS, SPIRAL_RADIUS_SCALE } = CONSTANTS.HURRICANE;
+      const eyeRadius = EYE_BASE_RADIUS + (Config.settings.hurricaneIntensity * EYE_RADIUS_SCALE);
+      const eyeWallRadius = eyeRadius + EYEWALL_OFFSET;
+      const spiralRadius = SPIRAL_BASE_RADIUS + (Config.settings.hurricaneIntensity * SPIRAL_RADIUS_SCALE);
+      
+      if (distanceFromCenter < eyeRadius) {
+        return new THREE.Color(CONSTANTS.COLORS.HURRICANE.EYE);
+      } else if (distanceFromCenter < eyeWallRadius) {
+        const intensity = 1 - ((distanceFromCenter - eyeRadius) / (eyeWallRadius - eyeRadius));
+        const color = new THREE.Color(CONSTANTS.COLORS.HURRICANE.EYEWALL)
+          .lerp(new THREE.Color(CONSTANTS.COLORS.HURRICANE.EYEWALL_INTENSE), intensity);
+        const pulseIntensity = (Math.sin(Date.now() * 0.003) + 1) * 0.5;
+        return color.multiplyScalar(0.8 + pulseIntensity * 0.2);
+      } else if (distanceFromCenter < spiralRadius) {
+        const bandIntensity = 1 - ((distanceFromCenter - eyeWallRadius) / (spiralRadius - eyeWallRadius));
+        if (speed > 60) return new THREE.Color(0xFF0000).lerp(new THREE.Color(0xFF8800), 1 - bandIntensity);
+        if (speed > 40) return new THREE.Color(0xFF8800).lerp(new THREE.Color(0xFFFF00), 1 - bandIntensity);
+        return new THREE.Color(0xFFFF00).lerp(new THREE.Color(0x66FF66), 1 - bandIntensity);
+      }
+    }
+    
+    if (stormType === 'thunderstorm' && isStormCore) {
+      const color = new THREE.Color(CONSTANTS.COLORS.WIND_SPEED.VERY_STRONG);
+      const pulseIntensity = (Math.sin(Date.now() * 0.002) + 1) * 0.5;
+      return color.multiplyScalar(0.7 + pulseIntensity * 0.3);
+    }
+    
+    if (stormType === 'thunderstorm' && distanceFromCenter < 5) {
+      const intensity = Math.max(0.5, 1 - (distanceFromCenter / 5));
+      return new THREE.Color(CONSTANTS.COLORS.WIND_SPEED.STRONG)
+        .lerp(new THREE.Color(CONSTANTS.COLORS.WIND_SPEED.VERY_STRONG), intensity);
+    }
+    
+    const { THRESHOLDS } = CONSTANTS.WIND_SPEED;
+    const { WIND_SPEED: COLORS } = CONSTANTS.COLORS;
+    
+    if (speed < THRESHOLDS[0]) return COLORS.CALM;
+    if (speed < THRESHOLDS[1]) return COLORS.LIGHT;
+    if (speed < THRESHOLDS[2]) return COLORS.MODERATE;
+    if (speed < THRESHOLDS[3]) return COLORS.STRONG;
+    return COLORS.VERY_STRONG;
+  },
+
+  normalizeGridPosition(worldPos) {
+    return (worldPos + CONSTANTS.GRID.RANGE + 1) / (2 * CONSTANTS.GRID.RANGE + 2);
+  },
+
+  calculateDistance(pos1, pos2) {
+    const dx = pos1.x - pos2.x;
+    const dz = pos1.z - pos2.z;
+    return Math.sqrt(dx * dx + dz * dz);
+  },
+
+  getRandomPosition() {
+    return {
+      x: Math.random() * 16 - 8,
+      z: Math.random() * 16 - 8
+    };
+  }
+};
+
+// === WIND CALCULATION MODULES ===
+const WindCalculator = {
+  generateDirection(x, y, z, windPattern) {
+    const flightLevel = CONSTANTS.FLIGHT_LEVELS.MIN + ((y / CONSTANTS.GRID.SPACING) * CONSTANTS.FLIGHT_LEVELS.INCREMENT);
+    let directionAngle = 0;
+    
+    // Hurricane effects (highest priority)
+    if (Config.settings.hurricaneActive) {
+      directionAngle += this.calculateHurricaneEffect(x, y, z);
+    } 
+    // Thunderstorm effects
+    else if (Config.settings.thunderstormActive) {
+      directionAngle += this.calculateThunderstormEffect(x, y, z);
+    }
+    
+    // Altitude-based patterns
+    directionAngle += this.getAltitudeWindPattern(flightLevel, x, z);
+    
+    // Regional patterns
+    directionAngle += this.getRegionalWindPattern(windPattern, x, y, z);
+    
+    // Time-based variations
+    directionAngle += this.getTimeBasedVariation(x, y, z);
+    
+    const angleRad = (directionAngle * Math.PI) / 180;
+    return new THREE.Vector3(
+      Math.cos(angleRad),
+      0,
+      Math.sin(angleRad)
+    ).normalize();
+  },
+
+  calculateHurricaneEffect(x, y, z) {
+    const dx = x - Config.settings.hurricanePosition.x;
+    const dz = z - Config.settings.hurricanePosition.z;
+    const distanceFromCenter = Utils.calculateDistance({ x, z }, Config.settings.hurricanePosition);
+    
+    const { EYE_BASE_RADIUS, EYE_RADIUS_SCALE, EYEWALL_OFFSET, SPIRAL_BASE_RADIUS, SPIRAL_RADIUS_SCALE } = CONSTANTS.HURRICANE;
+    const eyeRadius = EYE_BASE_RADIUS + (Config.settings.hurricaneIntensity * EYE_RADIUS_SCALE);
+    const eyeWallRadius = eyeRadius + EYEWALL_OFFSET;
+    const spiralRadius = SPIRAL_BASE_RADIUS + (Config.settings.hurricaneIntensity * SPIRAL_RADIUS_SCALE);
+    
+    if (distanceFromCenter < eyeRadius) {
+      return Math.random() * 60 - 30; // Light, variable winds in eye
+    } else if (distanceFromCenter < eyeWallRadius) {
+      const hurricaneAngle = Math.atan2(dz, dx) * 180 / Math.PI;
+      const rotationAngle = hurricaneAngle + 90; // Tangential flow
+      const spiralAngle = rotationAngle - 15; // Inward spiral
+      const altitudeEffect = Math.sin((y / 10) * Math.PI) * 10;
+      return spiralAngle + altitudeEffect;
+    } else if (distanceFromCenter < spiralRadius) {
+      const hurricaneAngle = Math.atan2(dz, dx) * 180 / Math.PI;
+      const spiralIntensity = 1 - ((distanceFromCenter - eyeWallRadius) / (spiralRadius - eyeWallRadius));
+      const spiralAngle = hurricaneAngle + 90 - (30 * spiralIntensity);
+      const bandEffect = Math.sin(distanceFromCenter * 2 + hurricaneAngle * 0.1) * 15;
+      const shearEffect = (y > 6) ? (y - 6) * 5 : 0;
+      return spiralAngle + bandEffect + shearEffect;
+    } else {
+      if (y > 8) {
+        const hurricaneAngle = Math.atan2(dz, dx) * 180 / Math.PI;
+        const outflowAngle = hurricaneAngle - 90;
+        const outflowIntensity = Math.exp(-(distanceFromCenter - spiralRadius) / 3);
+        return outflowAngle * outflowIntensity * 0.3;
+      }
+    }
+    return 0;
+  },
+
+  calculateThunderstormEffect(x, y, z) {
+    const dx = x - Config.settings.thunderstormPosition.x;
+    const dz = z - Config.settings.thunderstormPosition.z;
+    const distanceFromStorm = Utils.calculateDistance({ x, z }, Config.settings.thunderstormPosition);
+    
+    const stormAngle = Math.atan2(dz, dx) * 180 / Math.PI;
+    const rotationStrength = Math.exp(-distanceFromStorm / 3) * 180;
+    const verticalComponent = Math.sin((y / 10) * Math.PI) * 45;
+    const turbulence = (Math.sin(x * 3 + y * 2 + z * 2.5) + Math.cos(x * 2 + y * 2.5 + z * 2)) * 30;
+    
+    let effect = stormAngle + rotationStrength + verticalComponent + turbulence;
+    
+    if (distanceFromStorm < 3) {
+      effect += Math.random() * 60 - 30;
+    }
+    
+    return effect;
+  },
+
+  getAltitudeWindPattern(flightLevel, x, z) {
+    if (flightLevel <= 100) {
+      return Math.sin((x + z) * 0.6) * 25 + Math.cos(x * 0.8) * 15;
+    } else if (flightLevel <= 200) {
+      return Math.sin((x - z) * 0.4) * 20 + Math.cos(z * 0.7) * 18;
+    } else if (flightLevel <= 300) {
+      return Math.cos((x + z) * 0.3) * 15 + Math.sin(x * 0.5) * 12;
+    } else if (flightLevel <= 400) {
+      return 30 + Math.sin(z * 0.2) * 10 + Math.cos(x * 0.3) * 8;
+    } else {
+      return 45 + Math.cos((x - z) * 0.2) * 12 + Math.sin(x * 0.25) * 6;
+    }
+  },
+
+  getRegionalWindPattern(pattern, x, y, z) {
+    const timeSeed = AppState.currentDate.getTime() + AppState.currentTime.hour;
+    const seededRandom = (Math.sin(timeSeed + x * 1000 + y * 100 + z * 10) + 1) / 2;
+    const randomFactor = Math.sin(timeSeed * 0.001 + x * 0.3 + y * 0.5 + z * 0.7) * 15;
+    let effect = randomFactor;
+    
+    switch(pattern) {
+      case 'nor_easter':
+        effect += (z * 2) + Math.sin(y * 0.8) * 15 + (seededRandom * 18 - 9);
+        break;
+      case 'gulf_stream':
+        effect += (x * 1.2) + Math.cos(y * 0.6) * 12 + (seededRandom * 16 - 8);
+        break;
+      case 'continental':
+        effect += (x + z) * 0.8 + Math.sin(y * 0.5) * 18 + (seededRandom * 22 - 11);
+        break;
+      case 'desert':
+        const thermalEffect = Math.max(0, 1 - (y / 10));
+        effect += Math.sin(x * 0.4) * 10 * thermalEffect + Math.cos(y * 0.7) * 20 + (seededRandom * 14 - 7);
+        break;
+      case 'pacific':
+        const jetStreamEffect = Math.min(1, y / 8);
+        effect += 25 * jetStreamEffect + (z * 1.5) + Math.sin(y * 0.4) * 25 + (seededRandom * 16 - 8);
+        break;
+      case 'plains':
+        effect += (x - z) * 1.2 + Math.cos(y * 0.6) * 16 + (seededRandom * 25 - 12.5);
+        break;
+    }
+    
+    return effect;
+  },
+
+  getTimeBasedVariation(x, y, z) {
+    const timeSeed = AppState.currentDate.getTime() + AppState.currentTime.hour;
+    return Math.sin(timeSeed + x * 30 + y * 40 + z * 35) * (5 + y * 2);
+  },
+
+  calculateSpeed(pattern, x, y, z) {
+    const baseSpeed = 10 + (y * CONSTANTS.WIND_SPEED.BASE_ALTITUDE_FACTOR);
+    let speed = baseSpeed;
+    
+    // Time variations
+    const hourFactor = Math.sin((AppState.currentTime.hour / 24) * 2 * Math.PI) * 5;
+    const dayOfYear = Math.floor((AppState.currentDate - new Date(AppState.currentDate.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+    const seasonalFactor = Math.cos((dayOfYear / 365) * 2 * Math.PI) * 8;
+    
+    // Storm effects
+    if (Config.settings.hurricaneActive) {
+      speed = this.calculateHurricaneSpeed(x, y, z);
+    } else if (Config.settings.thunderstormActive) {
+      speed += this.calculateThunderstormSpeed(x, y, z);
+    }
+    
+    // Regional patterns
+    speed += this.getRegionalSpeedModifier(pattern, x, y, z);
+    speed += hourFactor + seasonalFactor;
+    
+    return Math.max(CONSTANTS.WIND_SPEED.MIN, Math.min(CONSTANTS.WIND_SPEED.MAX, speed));
+  },
+
+  calculateHurricaneSpeed(x, y, z) {
+    const dx = x - Config.settings.hurricanePosition.x;
+    const dz = z - Config.settings.hurricanePosition.z;
+    const distanceFromCenter = Utils.calculateDistance({ x, z }, Config.settings.hurricanePosition);
+    
+    const { EYE_BASE_RADIUS, EYE_RADIUS_SCALE, EYEWALL_OFFSET, SPIRAL_BASE_RADIUS, SPIRAL_RADIUS_SCALE, CATEGORY_WINDS } = CONSTANTS.HURRICANE;
+    const eyeRadius = EYE_BASE_RADIUS + (Config.settings.hurricaneIntensity * EYE_RADIUS_SCALE);
+    const eyeWallRadius = eyeRadius + EYEWALL_OFFSET;
+    const spiralRadius = SPIRAL_BASE_RADIUS + (Config.settings.hurricaneIntensity * SPIRAL_RADIUS_SCALE);
+    const maxWind = CATEGORY_WINDS[Config.settings.hurricaneIntensity];
+    
+    if (distanceFromCenter < eyeRadius) {
+      return 5 + Math.random() * 10;
+    } else if (distanceFromCenter < eyeWallRadius) {
+      const eyeWallIntensity = 1 - ((distanceFromCenter - eyeRadius) / (eyeWallRadius - eyeRadius));
+      let speed = maxWind * 0.7 + (maxWind * 0.3 * eyeWallIntensity);
+      const turbulence = (Math.sin(x * 3 + y * 2 + z * 2.5) + Math.cos(x * 2 + y * 2.5 + z * 2)) * 20;
+      speed += turbulence;
+      const verticalProfile = Math.sin((y / 10) * Math.PI);
+      return speed * (0.7 + verticalProfile * 0.3);
+    } else if (distanceFromCenter < spiralRadius) {
+      const bandIntensity = 1 - ((distanceFromCenter - eyeWallRadius) / (spiralRadius - eyeWallRadius));
+      let speed = maxWind * 0.3 + (maxWind * 0.4 * bandIntensity);
+      const bandVariation = Math.sin(distanceFromCenter * 1.5 + Date.now() * 0.001) * 15;
+      const feederBandEffect = Math.cos(distanceFromCenter * 0.8) * 10;
+      return speed + bandVariation + feederBandEffect;
+    } else {
+      let speed = 10 + (y * 2.5);
+      if (y > 8) {
+        const outflowIntensity = Math.exp(-(distanceFromCenter - spiralRadius) / 4);
+        speed += outflowIntensity * 25;
+      } else {
+        const inflowIntensity = Math.exp(-(distanceFromCenter - spiralRadius) / 6);
+        speed += inflowIntensity * 15;
+      }
+      return Math.max(5, speed);
+    }
+  },
+
+  calculateThunderstormSpeed(x, y, z) {
+    const dx = x - Config.settings.thunderstormPosition.x;
+    const dz = z - Config.settings.thunderstormPosition.z;
+    const distanceFromStorm = Utils.calculateDistance({ x, z }, Config.settings.thunderstormPosition);
+    
+    const stormInfluence = Math.exp(-distanceFromStorm / 4);
+    const verticalDevelopment = Math.sin((y / 10) * Math.PI) * 30;
+    const turbulence = (Math.sin(x * 2.5 + y * 1.8 + z * 2.2) + Math.cos(x * 1.8 + y * 2.2 + z * 1.5)) * 15;
+    const stormEffect = (verticalDevelopment + turbulence) * stormInfluence;
+    
+    let additionalSpeed = stormEffect;
+    if (distanceFromStorm < 3 && y > 2) {
+      additionalSpeed = Math.max(additionalSpeed, 60 + (Math.random() * 20));
+    }
+    
+    return additionalSpeed;
+  },
+
+  getRegionalSpeedModifier(pattern, x, y, z) {
+    const timeSeed = AppState.currentDate.getTime() + AppState.currentTime.hour;
+    const seededRandom = (Math.sin(timeSeed + x * 1000 + y * 100 + z * 10) + 1) / 2;
+    
+    switch(pattern) {
+      case 'nor_easter':
+        return (x + 10) * 1.8 + Math.sin(z * 0.4) * 8 + (seededRandom * 18 - 9);
+      case 'gulf_stream':
+        const coastalEffect = Math.sin((z + 10) * 0.3) * 12;
+        return coastalEffect + (seededRandom * 16 - 8);
+      case 'continental':
+        const lakeEffect = Math.cos(x * 0.6) * Math.sin(z * 0.5) * 15;
+        return lakeEffect + (seededRandom * 22 - 11);
+      case 'desert':
+        const thermalEffect = Math.abs(x) + Math.abs(z);
+        const thermalBoost = AppState.currentTime.hour >= 10 && AppState.currentTime.hour <= 16 ? 8 : 0;
+        return thermalEffect * 0.8 + Math.sin(y * 0.4) * 10 + (seededRandom * 14 - 7) + thermalBoost;
+      case 'pacific':
+        return (10 - x) * 2.0 + Math.cos(y * 0.3) * 6 + (seededRandom * 16 - 8);
+      case 'plains':
+        const stormEffect = Math.sin((x + z) * 0.4) * 12;
+        return stormEffect + (seededRandom * 25 - 12.5);
+      default:
+        return 0;
+    }
+  }
+};
+
+// === SCENE MANAGEMENT ===
+const SceneManager = {
+  init() {
+    this.setupScene();
+    this.setupCamera();
+    this.setupRenderer();
+    this.setupControls();
+    this.setupLighting();
+    this.setupInteraction();
+    this.createGroundPlane();
+    this.createArrowGeometry();
+  },
+
+  setupScene() {
+    AppState.scene = new THREE.Scene();
+    this.updateBackgroundColor(Config.settings.darkBackground);
+  },
+
+  setupCamera() {
+    const canvas = document.getElementById('three-canvas');
+    const rect = canvas.getBoundingClientRect();
+    AppState.camera = new THREE.PerspectiveCamera(75, rect.width / rect.height, 0.1, 1000);
+    AppState.camera.position.set(15, 20, 15);
+  },
+
+  setupRenderer() {
+    const canvas = document.getElementById('three-canvas');
+    const rect = canvas.getBoundingClientRect();
+    AppState.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    AppState.renderer.setSize(rect.width, rect.height);
+    AppState.renderer.setPixelRatio(window.devicePixelRatio);
+  },
+
+  setupControls() {
+    AppState.controls = new THREE.OrbitControls(AppState.camera, AppState.renderer.domElement);
+    AppState.controls.enableDamping = true;
+    AppState.controls.dampingFactor = 0.05;
+    AppState.controls.enablePan = false;
+  },
+
+  setupLighting() {
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    AppState.scene.add(ambientLight);
+  },
+
+  setupInteraction() {
+    AppState.raycaster = new THREE.Raycaster();
+    AppState.mouse = new THREE.Vector2();
+  },
+
+  updateBackgroundColor(isDark) {
+    const color = isDark ? CONSTANTS.COLORS.BACKGROUND.DARK : CONSTANTS.COLORS.BACKGROUND.LIGHT;
+    AppState.scene.background = new THREE.Color(color);
+  },
+
+  createGroundPlane() {
+    const geometry = new THREE.PlaneGeometry(CONSTANTS.MAP.GROUND_SIZE, CONSTANTS.MAP.GROUND_SIZE);
+    
+    AppState.mapCanvas = document.createElement('canvas');
+    AppState.mapCanvas.width = CONSTANTS.MAP.TEXTURE_SIZE;
+    AppState.mapCanvas.height = CONSTANTS.MAP.TEXTURE_SIZE;
+    AppState.mapContext = AppState.mapCanvas.getContext('2d');
+    
+    AppState.mapContext.fillStyle = '#4a7c59';
+    AppState.mapContext.fillRect(0, 0, CONSTANTS.MAP.TEXTURE_SIZE, CONSTANTS.MAP.TEXTURE_SIZE);
+    
+    AppState.mapTexture = new THREE.CanvasTexture(AppState.mapCanvas);
+    
+    const material = new THREE.MeshLambertMaterial({ map: AppState.mapTexture });
+    AppState.groundPlane = new THREE.Mesh(geometry, material);
+    AppState.groundPlane.rotation.x = -Math.PI / 2;
+    AppState.groundPlane.position.y = -1;
+    AppState.scene.add(AppState.groundPlane);
+    
+    MapManager.init();
+  },
+
+  createArrowGeometry() {
+    const shaftGeometry = new THREE.CylinderGeometry(0.03, 0.06, 1.0, 8);
+    const headGeometry = new THREE.ConeGeometry(0.12, 0.3, 8);
+    
+    AppState.arrowGeometry = new THREE.BufferGeometry();
+    
+    const shaftMatrix = new THREE.Matrix4();
+    const headMatrix = new THREE.Matrix4();
+    headMatrix.setPosition(0, 0.65, 0);
+    
+    const shaftGeo = shaftGeometry.clone().applyMatrix4(shaftMatrix);
+    const headGeo = headGeometry.clone().applyMatrix4(headMatrix);
+    
+    AppState.arrowGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries([shaftGeo, headGeo]);
+    
+    AppState.arrowMaterial = new THREE.MeshLambertMaterial({
+      color: CONSTANTS.COLORS.ARROW,
+      transparent: true,
+      opacity: 0.85
+    });
+  }
+};
+
+// === WIND CUBE GENERATION ===
+const WindGenerator = {
+  generateGrid() {
+    this.clearExisting();
+    const windPattern = Config.regions[Config.settings.region].windPattern;
+    
+    for (let x = -CONSTANTS.GRID.RANGE; x <= CONSTANTS.GRID.RANGE; x += CONSTANTS.GRID.SPACING) {
+      for (let y = 0; y < CONSTANTS.FLIGHT_LEVELS.COUNT; y++) {
+        for (let z = -CONSTANTS.GRID.RANGE; z <= CONSTANTS.GRID.RANGE; z += CONSTANTS.GRID.SPACING) {
+          const flightLevel = CONSTANTS.FLIGHT_LEVELS.MIN + (y * CONSTANTS.FLIGHT_LEVELS.INCREMENT);
+          const speed = WindCalculator.calculateSpeed(windPattern, x, y * CONSTANTS.GRID.SPACING, z);
+          this.createCube(x, y * CONSTANTS.GRID.SPACING, z, Math.round(speed), flightLevel);
+        }
+      }
+    }
+  },
+
+  clearExisting() {
+    AppState.windCubes.forEach(cube => AppState.scene.remove(cube));
+    // Remove HTML arrows from DOM
+    AppState.windArrows.forEach(arrow => {
+      if (arrow.parentNode) {
+        arrow.parentNode.removeChild(arrow);
+      }
+    });
+    AppState.windCubes = [];
+    AppState.windArrows = [];
+  },
+
+  createCube(x, y, z, speed, flightLevel) {
+    const geometry = new THREE.BoxGeometry(2, 2, 2);
+    const windPattern = Config.regions[Config.settings.region].windPattern;
+    const windDirection = WindCalculator.generateDirection(x, y, z, windPattern);
+    
+    // Determine color based on conditions
+    let color, stormType = null, distanceFromCenter = Infinity, isStormCore = false;
+    
+    if (Config.settings.hurricaneActive) {
+      stormType = 'hurricane';
+      distanceFromCenter = Utils.calculateDistance({ x, z }, Config.settings.hurricanePosition);
+    } else if (Config.settings.thunderstormActive) {
+      stormType = 'thunderstorm';
+      distanceFromCenter = Utils.calculateDistance({ x, z }, Config.settings.thunderstormPosition);
+      isStormCore = distanceFromCenter < 3 && y > 2;
+    }
+    
+    color = Utils.getWindSpeedColor(speed, stormType, distanceFromCenter, isStormCore);
+    
+    const material = new THREE.MeshLambertMaterial({ 
+      color: color,
+      transparent: true,
+      opacity: Config.settings.cubeOpacity
+    });
+    
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(x, y, z);
+    cube.userData = { 
+      speed: speed, 
+      flightLevel: flightLevel,
+      yLevel: y / CONSTANTS.GRID.SPACING,
+      windDirection: windDirection
+    };
+    
+    // Create arrow (HTML element, not added to scene)
+    const arrow = this.createArrow(cube, windDirection, speed);
+    
+    AppState.scene.add(cube);
+    AppState.windCubes.push(cube);
+    AppState.windArrows.push(arrow);
+  },
+
+  createArrow(cube, windDirection, speed) {
+    // Create HTML/CSS arrow like the mini map (for perfect matching)
+    const arrow = document.createElement('div');
+    arrow.className = 'wind-arrow-3d';
+    arrow.style.position = 'absolute';
+    arrow.style.width = '0';
+    arrow.style.height = '0';
+    arrow.style.borderLeft = '6px solid transparent';
+    arrow.style.borderRight = '6px solid transparent';
+    arrow.style.borderBottom = '16px solid #00ddff';
+    arrow.style.transformOrigin = 'center bottom';
+    arrow.style.pointerEvents = 'none';
+    arrow.style.zIndex = '1000';
+    // Removed expensive drop-shadow for better performance
+    
+    // Use exact same calculation as mini map
+    const windAngle = Math.atan2(windDirection.x, -windDirection.z) * 180 / Math.PI;
+    const bankingEffect = Math.sin((cube.position.x + cube.position.z) * 0.3) * 5;
+    const speedBanking = (speed - 50) / 10;
+    const totalRotation = windAngle + bankingEffect + speedBanking;
+    
+    // Scale based on wind speed (same as mini map)
+    const scale = 0.6 + (speed / 100) * 0.4;
+    arrow.style.transform = `translate(-50%, -100%) rotate(${totalRotation}deg) scale(${scale})`;
+    
+    arrow.style.display = 'none'; // Hidden by default
+    arrow.userData = { 
+      cubeIndex: AppState.windCubes.length,
+      yLevel: cube.position.y / CONSTANTS.GRID.SPACING,
+      cube: cube // Store reference to cube for position updates
+    };
+    
+    // Add to document
+    document.body.appendChild(arrow);
+    
+    return arrow;
+  },
+
+  regenerate() {
+    this.generateGrid();
+    
+    // Restore selection state
+    if (AppState.selectedFlightLevel !== null) {
+      SelectionManager.selectFlightLevel(AppState.selectedFlightLevel);
+    }
+  }
+};
+
+// === SELECTION MANAGEMENT ===
+const SelectionManager = {
+  selectFlightLevel(yLevel) {
+    this.deselectFlightLevel();
+    
+    AppState.selectedFlightLevel = yLevel;
+    
+    AppState.windCubes.forEach(cube => {
+      if (cube.userData.yLevel === yLevel) {
+        cube.material.opacity = 0.5;
+        
+        const wireframeGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const wireframeMaterial = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.8
+        });
+        const wireframe = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+        wireframe.position.copy(cube.position);
+        AppState.scene.add(wireframe);
+        AppState.selectedCubes.push(wireframe);
+      } else {
+        cube.material.opacity = Config.settings.cubeOpacity;
+      }
+    });
+    
+    this.updateArrowVisibility();
+    MiniMapManager.update();
+  },
+
+  deselectFlightLevel() {
+    AppState.selectedFlightLevel = null;
+    
+    AppState.selectedCubes.forEach(wireframe => AppState.scene.remove(wireframe));
+    AppState.selectedCubes = [];
+    
+    AppState.windCubes.forEach(cube => {
+      cube.material.opacity = Config.settings.cubeOpacity;
+    });
+    
+    this.updateArrowVisibility();
+    MiniMapManager.update();
+  },
+
+  updateArrowVisibility() {
+    AppState.windArrows.forEach(arrow => {
+      const shouldShow = Config.settings.showWindArrows && 
+                        AppState.selectedFlightLevel !== null && 
+                        arrow.userData.yLevel === AppState.selectedFlightLevel;
+      arrow.style.display = shouldShow ? 'block' : 'none';
+    });
+    
+    // Update arrow positions if visible
+    if (Config.settings.showWindArrows && AppState.selectedFlightLevel !== null) {
+      this.updateArrowPositions();
+    }
+  },
+
+  updateArrowPositions() {
+    AppState.windArrows.forEach(arrow => {
+      if (arrow.style.display === 'block') {
+        const cube = arrow.userData.cube;
+        const screenPosition = this.worldToScreen(cube.position.x, cube.position.y + 1.5, cube.position.z);
+        
+        if (screenPosition) {
+          arrow.style.left = screenPosition.x + 'px';
+          arrow.style.top = screenPosition.y + 'px';
+          arrow.style.visibility = 'visible';
+        } else {
+          // Hide arrows that are outside canvas bounds or behind camera
+          arrow.style.visibility = 'hidden';
+        }
+      }
+    });
+  },
+
+  worldToScreen(x, y, z) {
+    const vector = new THREE.Vector3(x, y, z);
+    vector.project(AppState.camera);
+    
+    const canvas = AppState.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    
+    const screenX = (vector.x * 0.5 + 0.5) * rect.width + rect.left;
+    const screenY = (-vector.y * 0.5 + 0.5) * rect.height + rect.top;
+    
+    // Only return position if in front of camera AND within canvas bounds
+    if (vector.z < 1 && 
+        screenX >= rect.left && screenX <= rect.right &&
+        screenY >= rect.top && screenY <= rect.bottom) {
+      return { x: screenX, y: screenY };
+    }
+    return null;
+  },
+
+  toggleWindArrows(showArrows) {
+    Config.settings.showWindArrows = showArrows;
+    this.updateArrowVisibility();
+    MiniMapManager.updateArrowVisibility();
+  }
+};
+
+// === EVENT HANDLERS ===
+const EventHandlers = {
+  init() {
+    const canvas = AppState.renderer.domElement;
+    
+    // Mouse events
+    canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+    canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+    canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
+    canvas.addEventListener('click', this.onMouseClick.bind(this));
+    
+    // Touch events
+    canvas.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+    canvas.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+    canvas.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+    
+    // Window events
+    window.addEventListener('resize', this.onWindowResize.bind(this));
+    window.addEventListener('blur', this.onWindowBlur.bind(this));
+    
+    // Mini map resize
+    const resizeHandle = document.getElementById('mini-map-resize-handle');
+    resizeHandle.addEventListener('mousedown', MiniMapManager.onResizeStart.bind(MiniMapManager));
+    resizeHandle.addEventListener('touchstart', MiniMapManager.onResizeStart.bind(MiniMapManager), { passive: false });
+  },
+
+  onMouseMove(event) {
+    if (AppState.miniMap.isResizing) return;
+    
+    this.updateMousePosition(event.clientX, event.clientY);
+    this.handleHover();
+  },
+
+  onMouseDown(event) {
+    AppState.mouseDownPosition.x = event.clientX;
+    AppState.mouseDownPosition.y = event.clientY;
+    AppState.isDragging = false;
+  },
+
+  onMouseUp(event) {
+    const deltaX = Math.abs(event.clientX - AppState.mouseDownPosition.x);
+    const deltaY = Math.abs(event.clientY - AppState.mouseDownPosition.y);
+    AppState.isDragging = deltaX > 5 || deltaY > 5;
+  },
+
+  onMouseClick(event) {
+    if (AppState.miniMap.isResizing || AppState.isDragging) return;
+    
+    this.updateMousePosition(event.clientX, event.clientY);
+    this.handleClick();
+  },
+
+  onTouchStart(event) {
+    event.preventDefault();
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      AppState.mouseDownPosition.x = touch.clientX;
+      AppState.mouseDownPosition.y = touch.clientY;
+      AppState.isDragging = false;
+    }
+  },
+
+  onTouchMove(event) {
+    event.preventDefault();
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      this.updateMousePosition(touch.clientX, touch.clientY);
+      this.handleHover();
+    }
+  },
+
+  onTouchEnd(event) {
+    event.preventDefault();
+    if (event.changedTouches.length === 1) {
+      const touch = event.changedTouches[0];
+      const deltaX = Math.abs(touch.clientX - AppState.mouseDownPosition.x);
+      const deltaY = Math.abs(touch.clientY - AppState.mouseDownPosition.y);
+      AppState.isDragging = deltaX > 5 || deltaY > 5;
+      
+      if (!AppState.isDragging) {
+        this.updateMousePosition(touch.clientX, touch.clientY);
+        this.handleClick();
+      }
+      
+      UIManager.hideTooltip();
+      AppState.isHovering = false;
+    }
+  },
+
+  onWindowResize() {
+    const canvas = AppState.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    
+    AppState.camera.aspect = rect.width / rect.height;
+    AppState.camera.updateProjectionMatrix();
+    AppState.renderer.setSize(rect.width, rect.height);
+    
+    // Update arrow positions after resize
+    if (Config.settings.showWindArrows && AppState.selectedFlightLevel !== null) {
+      SelectionManager.updateArrowPositions();
+    }
+  },
+
+  onWindowBlur() {
+    if (AppState.miniMap.isResizing) {
+      MiniMapManager.onResizeEnd();
+    }
+  },
+
+  updateMousePosition(clientX, clientY) {
+    const canvas = AppState.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    
+    AppState.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    AppState.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  },
+
+  handleHover() {
+    AppState.raycaster.setFromCamera(AppState.mouse, AppState.camera);
+    const intersects = AppState.raycaster.intersectObjects(AppState.windCubes);
+    
+    if (intersects.length > 0) {
+      const hoveredCube = intersects[0].object;
+      let cubeToShow = hoveredCube;
+      
+      if (AppState.selectedFlightLevel !== null) {
+        const targetCube = AppState.windCubes.find(cube => 
+          cube.position.x === hoveredCube.position.x && 
+          cube.position.z === hoveredCube.position.z && 
+          cube.userData.yLevel === AppState.selectedFlightLevel
+        );
+        if (targetCube) cubeToShow = targetCube;
+      }
+      
+      AppState.isHovering = true;
+      AppState.renderer.domElement.style.cursor = 'pointer';
+      UIManager.showTooltip(cubeToShow, event.clientX, event.clientY);
+      
+      if (AppState.selectedFlightLevel === null) {
+        this.applyHoverEffects(hoveredCube.userData.yLevel);
+      }
+    } else {
+      this.handleHoverEnd();
+    }
+  },
+
+  handleHoverEnd() {
+    AppState.isHovering = false;
+    AppState.renderer.domElement.style.cursor = 'move';
+    UIManager.hideTooltip();
+    
+    if (AppState.selectedFlightLevel === null) {
+      AppState.windArrows.forEach(arrow => arrow.style.display = 'none');
+    }
+  },
+
+  applyHoverEffects(hoveredYLevel) {
+    AppState.windCubes.forEach(cube => {
+      cube.material.opacity = cube.userData.yLevel === hoveredYLevel ? 0.4 : Config.settings.cubeOpacity;
+    });
+    
+    AppState.windArrows.forEach(arrow => {
+      const shouldShow = Config.settings.showWindArrows && arrow.userData.yLevel === hoveredYLevel;
+      arrow.style.display = shouldShow ? 'block' : 'none';
+    });
+    
+    // Update positions for visible arrows
+    if (Config.settings.showWindArrows) {
+      SelectionManager.updateArrowPositions();
+    }
+  },
+
+  handleClick() {
+    AppState.raycaster.setFromCamera(AppState.mouse, AppState.camera);
+    const intersects = AppState.raycaster.intersectObjects(AppState.windCubes);
+    
+    if (intersects.length > 0) {
+      const clickedCube = intersects[0].object;
+      const clickedYLevel = clickedCube.userData.yLevel;
+      
+      if (AppState.selectedFlightLevel === clickedYLevel) {
+        SelectionManager.deselectFlightLevel();
+      } else {
+        SelectionManager.selectFlightLevel(clickedYLevel);
+      }
+    }
+  }
+};
+
+// === UI MANAGEMENT ===
+const UIManager = {
+  init() {
+    this.createGUI();
+    this.createTooltip();
+    TimeControls.updateDisplay();
+  },
+
+  createTooltip() {
+    AppState.tooltip = document.createElement('div');
+    AppState.tooltip.id = 'tooltip';
+    Object.assign(AppState.tooltip.style, {
+      position: 'absolute',
+      backgroundColor: 'rgba(0, 20, 40, 0.9)',
+      color: 'white',
+      padding: '8px 12px',
+      borderRadius: '6px',
+      fontSize: '14px',
+      fontFamily: 'Geist, system-ui, sans-serif',
+      pointerEvents: 'none',
+      zIndex: '1000',
+      display: 'none',
+      whiteSpace: 'nowrap',
+      border: '2px solid white',
+      boxShadow: '0 0 20px white',
+      backdropFilter: 'blur(8px)',
+      webkitBackdropFilter: 'blur(8px)'
+    });
+    document.body.appendChild(AppState.tooltip);
+  },
+
+  showTooltip(cube, clientX, clientY) {
+    const regionBounds = Config.regions[Config.settings.region].bounds;
+    const normalizedX = Utils.normalizeGridPosition(cube.position.x);
+    const normalizedZ = Utils.normalizeGridPosition(cube.position.z);
+    
+    const lat = regionBounds[0][0] + (regionBounds[1][0] - regionBounds[0][0]) * normalizedZ;
+    const lon = regionBounds[0][1] + (regionBounds[1][1] - regionBounds[0][1]) * normalizedX;
+    
+    const windDir = cube.userData.windDirection;
+    const windAngle = Math.atan2(windDir.z, windDir.x) * 180 / Math.PI;
+    const windDirection = ((windAngle + 360) % 360).toFixed(0);
+    
+    const latStr = Math.abs(lat).toFixed(2) + '°' + (lat >= 0 ? 'N' : 'S');
+    const lonStr = Math.abs(lon).toFixed(2) + '°' + (lon >= 0 ? 'E' : 'W');
+    
+    AppState.tooltip.innerHTML = `FL${String(cube.userData.flightLevel).padStart(3, '0')}<br/>Wind: ${cube.userData.speed} kt @ ${windDirection}°<br/>${latStr} ${lonStr}`;
+    AppState.tooltip.style.display = 'block';
+    AppState.tooltip.style.left = (clientX + 10) + 'px';
+    AppState.tooltip.style.top = (clientY - 10) + 'px';
+  },
+
+  hideTooltip() {
+    AppState.tooltip.style.display = 'none';
+  },
+
+  createGUI() {
+    AppState.gui = new dat.GUI();
+    AppState.gui.width = 300;
+    
+    // Region selector
+    AppState.gui.add(Config.settings, 'region', Object.keys(Config.regions))
+      .name('US Region')
+      .onChange(RegionManager.updateRegion.bind(RegionManager));
+    
+    // Map style selector
+    AppState.gui.add(Config.settings, 'mapStyle', ['OpenStreetMap', 'Satellite', 'Terrain'])
+      .name('Map Style')
+      .onChange(MapManager.updateStyle.bind(MapManager));
+    
+    this.createOptionsFolder();
+    this.createSimulationsFolder();
+    this.createTimeFolder();
+    
+    // Wind randomization button
+    AppState.gui.add({ randomizeWind: () => this.randomizeWind() }, 'randomizeWind').name('Randomize Wind');
+  },
+
+  createOptionsFolder() {
+    const optionsFolder = AppState.gui.addFolder('Options');
+    
+    optionsFolder.add(Config.settings, 'darkBackground')
+      .name('Dark Background')
+      .onChange(SceneManager.updateBackgroundColor.bind(SceneManager));
+    
+    optionsFolder.add(Config.settings, 'showWindArrows')
+      .name('Wind Direction')
+      .onChange(SelectionManager.toggleWindArrows.bind(SelectionManager));
+    
+    optionsFolder.add(Config.settings, 'cubeOpacity', 0.01, 0.3)
+      .name('Cube Opacity')
+      .onChange(this.updateCubeOpacity.bind(this));
+    
+    optionsFolder.open();
+  },
+
+  createSimulationsFolder() {
+    const simulationsFolder = AppState.gui.addFolder('Simulations');
+    
+    simulationsFolder.add(Config.settings, 'thunderstormActive')
+      .name('Thunderstorm')
+      .onChange(this.onStormToggle.bind(this, 'thunderstorm'));
+    
+    simulationsFolder.add(Config.settings, 'hurricaneActive')
+      .name('Hurricane')
+      .onChange(this.onStormToggle.bind(this, 'hurricane'));
+    
+    simulationsFolder.add(Config.settings, 'hurricaneIntensity', 1, 5, 1)
+      .name('Hurricane Category')
+      .onChange(this.onHurricaneIntensityChange.bind(this));
+    
+    simulationsFolder.open();
+  },
+
+  createTimeFolder() {
+    const timeFolder = AppState.gui.addFolder('Date & Time');
+    
+    TimeControls.createDateController(timeFolder);
+    TimeControls.createTimeController(timeFolder);
+    
+    timeFolder.open();
+  },
+
+  onStormToggle(stormType, value) {
+    const positionKey = stormType === 'hurricane' ? 'hurricanePosition' : 'thunderstormPosition';
+    if (value) {
+      Config.settings[positionKey] = Utils.getRandomPosition();
+    }
+    WindGenerator.regenerate();
+    if (AppState.selectedFlightLevel !== null) {
+      MiniMapManager.update();
+    }
+  },
+
+  onHurricaneIntensityChange() {
+    if (Config.settings.hurricaneActive) {
+      WindGenerator.regenerate();
+      if (AppState.selectedFlightLevel !== null) {
+        MiniMapManager.update();
+      }
+    }
+  },
+
+  randomizeWind() {
+    if (Config.settings.thunderstormActive) {
+      Config.settings.thunderstormPosition = Utils.getRandomPosition();
+    }
+    
+    if (Config.settings.hurricaneActive) {
+      Config.settings.hurricanePosition = Utils.getRandomPosition();
+    }
+    
+    const randomHourOffset = Math.floor(Math.random() * 24);
+    const randomDayOffset = Math.floor(Math.random() * 30);
+    
+    const originalTime = { ...AppState.currentTime };
+    const originalDate = new Date(AppState.currentDate);
+    
+    AppState.currentTime.hour = (AppState.currentTime.hour + randomHourOffset) % 24;
+    AppState.currentDate.setDate(AppState.currentDate.getDate() + randomDayOffset);
+    
+    WindGenerator.regenerate();
+    
+    AppState.currentTime = originalTime;
+    AppState.currentDate = originalDate;
+    TimeControls.updateDisplay();
+    
+    if (AppState.selectedFlightLevel !== null) {
+      setTimeout(() => MiniMapManager.update(), 50);
+    }
+  },
+
+  updateCubeOpacity() {
+    if (!AppState.isHovering && AppState.selectedFlightLevel === null) {
+      AppState.windCubes.forEach(cube => {
+        cube.material.opacity = Config.settings.cubeOpacity;
+      });
+    } else if (AppState.selectedFlightLevel !== null) {
+      AppState.windCubes.forEach(cube => {
+        if (cube.userData.yLevel !== AppState.selectedFlightLevel) {
+          cube.material.opacity = Config.settings.cubeOpacity;
+        }
+      });
+    }
+  }
+};
+
+// === TIME CONTROLS ===
+const TimeControls = {
+  updateDisplay() {
+    Config.settings.currentDate = Utils.formatDate(AppState.currentDate);
+    Config.settings.currentTime = Utils.formatTime(AppState.currentTime);
+    
+    if (AppState.gui) {
+      AppState.gui.updateDisplay();
+    }
+  },
+
+  changeDate(days) {
+    const newDate = new Date(AppState.currentDate);
+    newDate.setDate(newDate.getDate() + days);
+    AppState.currentDate = newDate;
+    this.updateDisplay();
+    WindGenerator.regenerate();
+    
+    if (AppState.selectedFlightLevel !== null) {
+      MiniMapManager.update();
+    }
+  },
+
+  changeTime(hours) {
+    AppState.currentTime.hour += hours;
+    
+    if (AppState.currentTime.hour >= 24) {
+      AppState.currentTime.hour = 0;
+      this.changeDate(1);
+      return;
+    } else if (AppState.currentTime.hour < 0) {
+      AppState.currentTime.hour = 23;
+      this.changeDate(-1);
+      return;
+    }
+    
+    this.updateDisplay();
+    WindGenerator.regenerate();
+    
+    if (AppState.selectedFlightLevel !== null) {
+      MiniMapManager.update();
+    }
+  },
+
+  createDateController(folder) {
+    const dateController = folder.add(Config.settings, 'currentDate').name('Date').listen();
+    const dateRow = dateController.domElement.parentElement.parentElement;
+    
+    this.setupNavigationRow(dateRow, () => this.changeDate(-1), () => this.changeDate(1));
+    
+    const dateInput = dateController.domElement.querySelector('input');
+    dateInput.readOnly = true;
+    dateInput.style.textAlign = 'center';
+    dateInput.style.width = '100%';
+    dateInput.parentElement.style.width = '120px';
+  },
+
+  createTimeController(folder) {
+    const timeController = folder.add(Config.settings, 'currentTime').name('Time').listen();
+    const timeRow = timeController.domElement.parentElement.parentElement;
+    
+    this.setupNavigationRow(timeRow, () => this.changeTime(-1), () => this.changeTime(1));
+    
+    const timeInput = timeController.domElement.querySelector('input');
+    timeInput.readOnly = true;
+    timeInput.style.textAlign = 'center';
+    timeInput.style.width = '100%';
+    timeInput.parentElement.style.width = '120px';
+  },
+
+  setupNavigationRow(row, prevCallback, nextCallback) {
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '8px';
+    
+    const label = row.querySelector('.property-name');
+    row.insertBefore(label, row.firstChild);
+    
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.display = 'flex';
+    buttonsContainer.style.gap = '4px';
+    
+    const prevBtn = this.createNavButton('←', prevCallback);
+    const nextBtn = this.createNavButton('→', nextCallback);
+    
+    buttonsContainer.appendChild(prevBtn);
+    buttonsContainer.appendChild(nextBtn);
+    row.appendChild(buttonsContainer);
+  },
+
+  createNavButton(text, callback) {
+    const button = document.createElement('button');
+    button.className = 'nav-button';
+    button.textContent = text;
+    button.onclick = callback;
+    return button;
+  }
+};
+
+// === MAP MANAGEMENT ===
+const MapManager = {
+  init() {
+    this.initLeaflet();
+    this.updateRegion(Config.settings.region);
+  },
+
+  initLeaflet() {
+    const mapDiv = document.getElementById('leaflet-map');
+    AppState.leafletMap = L.map(mapDiv, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      touchZoom: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false
+    });
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(AppState.leafletMap);
+  },
+
+  updateRegion(regionName) {
+    const region = Config.regions[regionName];
+    AppState.leafletMap.setView(region.center, region.zoom);
+    this.captureTexture();
+  },
+
+  updateStyle(styleName) {
+    AppState.leafletMap.eachLayer(layer => {
+      if (layer instanceof L.TileLayer) {
+        AppState.leafletMap.removeLayer(layer);
+      }
+    });
+    
+    const tileUrls = {
+      'OpenStreetMap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      'Satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'Terrain': 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
+    };
+    
+    L.tileLayer(tileUrls[styleName] || tileUrls['OpenStreetMap']).addTo(AppState.leafletMap);
+    this.captureTexture();
+  },
+
+  captureTexture() {
+    const region = Config.regions[Config.settings.region];
+    const zoom = region.zoom;
+    const center = region.center;
+    
+    const lat = center[0];
+    const lng = center[1];
+    
+    const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
+    const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+    
+    const tileUrls = {
+      'OpenStreetMap': `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`,
+      'Satellite': `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`,
+      'Terrain': `https://tile.opentopomap.org/${zoom}/${x}/${y}.png`
+    };
+    
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => this.processLoadedImage(img);
+    img.onerror = () => this.createFallbackTexture();
+    
+    img.src = tileUrls[Config.settings.mapStyle] || tileUrls['OpenStreetMap'];
+  },
+
+  processLoadedImage(img) {
+    AppState.mapContext.clearRect(0, 0, CONSTANTS.MAP.TEXTURE_SIZE, CONSTANTS.MAP.TEXTURE_SIZE);
+    AppState.mapContext.drawImage(img, 0, 0, CONSTANTS.MAP.TEXTURE_SIZE, CONSTANTS.MAP.TEXTURE_SIZE);
+    
+    this.addRegionLabel();
+    this.updateTexture();
+  },
+
+  createFallbackTexture() {
+    AppState.mapContext.fillStyle = '#4a7c59';
+    AppState.mapContext.fillRect(0, 0, CONSTANTS.MAP.TEXTURE_SIZE, CONSTANTS.MAP.TEXTURE_SIZE);
+    
+    this.addGridPattern();
+    this.addRegionLabel();
+    this.updateTexture();
+  },
+
+  addGridPattern() {
+    AppState.mapContext.strokeStyle = '#3a5a2a';
+    AppState.mapContext.lineWidth = 1;
+    for (let i = 0; i < CONSTANTS.MAP.TEXTURE_SIZE; i += 64) {
+      AppState.mapContext.beginPath();
+      AppState.mapContext.moveTo(i, 0);
+      AppState.mapContext.lineTo(i, CONSTANTS.MAP.TEXTURE_SIZE);
+      AppState.mapContext.stroke();
+      AppState.mapContext.beginPath();
+      AppState.mapContext.moveTo(0, i);
+      AppState.mapContext.lineTo(CONSTANTS.MAP.TEXTURE_SIZE, i);
+      AppState.mapContext.stroke();
+    }
+  },
+
+  addRegionLabel() {
+    AppState.mapContext.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    AppState.mapContext.fillRect(10, 10, 150, 30);
+    AppState.mapContext.fillStyle = 'white';
+    AppState.mapContext.font = '16px Arial';
+    AppState.mapContext.fillText(Config.settings.region, 20, 30);
+  },
+
+  updateTexture() {
+    if (AppState.mapTexture) {
+      AppState.mapTexture.needsUpdate = true;
+    } else {
+      AppState.mapTexture = new THREE.CanvasTexture(AppState.mapCanvas);
+    }
+    
+    if (AppState.groundPlane) {
+      AppState.groundPlane.material.map = AppState.mapTexture;
+      AppState.groundPlane.material.needsUpdate = true;
+    }
+    
+    MiniMapManager.updateGroundPlane();
+  }
+};
+
+// === REGION MANAGEMENT ===
+const RegionManager = {
+  updateRegion(regionName) {
+    Config.settings.region = regionName;
+    MapManager.updateRegion(regionName);
+    WindGenerator.regenerate();
+    MiniMapManager.update();
+    MiniMapManager.updateGroundPlane();
+  }
+};
+
+// === MINI MAP MANAGEMENT ===
+const MiniMapManager = {
+  init() {
+    AppState.miniMap.container = document.getElementById('mini-map-container');
+    AppState.miniMap.canvas = document.getElementById('mini-map-canvas');
+    
+    this.setupScene();
+    this.setupCamera();
+    this.setupRenderer();
+    this.setupLighting();
+    this.createGroundPlane();
+  },
+
+  setupScene() {
+    AppState.miniMap.scene = new THREE.Scene();
+    AppState.miniMap.scene.background = new THREE.Color(0x000000);
+  },
+
+  setupCamera() {
+    AppState.miniMap.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+    AppState.miniMap.camera.position.set(0, 50, 0);
+    AppState.miniMap.camera.lookAt(0, 0, 0);
+  },
+
+  setupRenderer() {
+    AppState.miniMap.renderer = new THREE.WebGLRenderer({ 
+      canvas: AppState.miniMap.canvas, 
+      antialias: true 
+    });
+    
+    const containerRect = AppState.miniMap.container.getBoundingClientRect();
+    AppState.miniMap.renderer.setSize(containerRect.width - 8, containerRect.height - 8);
+  },
+
+  setupLighting() {
+    const miniMapLight = new THREE.AmbientLight(0xffffff, 1.0);
+    AppState.miniMap.scene.add(miniMapLight);
+  },
+
+  createGroundPlane() {
+    const miniMapGeometry = new THREE.PlaneGeometry(CONSTANTS.MAP.GROUND_SIZE, CONSTANTS.MAP.GROUND_SIZE);
+    const miniMapMaterial = new THREE.MeshLambertMaterial({ color: 0x4a7c59 });
+    AppState.miniMap.groundPlane = new THREE.Mesh(miniMapGeometry, miniMapMaterial);
+    AppState.miniMap.groundPlane.rotation.x = -Math.PI / 2;
+    AppState.miniMap.groundPlane.position.y = -1;
+    AppState.miniMap.scene.add(AppState.miniMap.groundPlane);
+  },
+
+  update() {
+    if (!AppState.miniMap.renderer) return;
+    
+    if (AppState.selectedFlightLevel !== null) {
+      AppState.miniMap.container.classList.add('visible');
+      this.updateCubes();
+      this.updateArrows();
+    } else {
+      AppState.miniMap.container.classList.remove('visible');
+      this.clearArrows();
+    }
+  },
+
+  updateCubes() {
+    AppState.miniMap.cubes.forEach(cube => AppState.miniMap.scene.remove(cube));
+    AppState.miniMap.cubes = [];
+    
+    AppState.windCubes.forEach(cube => {
+      if (cube.userData.yLevel === AppState.selectedFlightLevel) {
+        const miniCube = cube.clone();
+        miniCube.position.copy(cube.position);
+        miniCube.position.y = 0;
+        miniCube.material = cube.material.clone();
+        miniCube.material.opacity = 0.25;
+        AppState.miniMap.scene.add(miniCube);
+        AppState.miniMap.cubes.push(miniCube);
+        
+        this.createArrow(cube);
+      }
+    });
+  },
+
+  updateArrows() {
+    AppState.miniMap.arrows.forEach(arrow => {
+      arrow.style.display = Config.settings.showWindArrows ? 'block' : 'none';
+    });
+  },
+
+  createArrow(cube) {
+    const arrow = document.createElement('div');
+    arrow.className = 'mini-map-arrow';
+    
+    const windDirection = cube.userData.windDirection;
+    const containerRect = AppState.miniMap.container.getBoundingClientRect();
+    const mapSize = containerRect.width - 8;
+    
+    const normalizedX = Utils.normalizeGridPosition(cube.position.x);
+    const normalizedZ = Utils.normalizeGridPosition(cube.position.z);
+    
+    const pixelX = normalizedX * mapSize;
+    const pixelZ = normalizedZ * mapSize;
+    
+    arrow.style.left = `${pixelX}px`;
+    arrow.style.top = `${pixelZ}px`;
+    
+    // Calculate wind angle - CSS arrow points UP (north) initially
+    // In 3D: +X = east, +Z = south (toward viewer in top-down view)
+    // In CSS minimap: +X = east, +Y = south (down on screen)
+    // CSS arrow points north initially, so we need angle from north (not east)
+    const windAngle = Math.atan2(windDirection.x, -windDirection.z) * 180 / Math.PI;
+    
+    const speed = cube.userData.speed;
+    const bankingEffect = Math.sin((cube.position.x + cube.position.z) * 0.3) * 5;
+    const speedBanking = (speed - 50) / 10;
+    const totalRotation = windAngle + bankingEffect + speedBanking;
+    
+    const scale = 0.6 + (speed / 100) * 0.4;
+    arrow.style.transform = `translate(-50%, -100%) rotate(${totalRotation}deg) scale(${scale})`;
+    
+    arrow.style.display = Config.settings.showWindArrows ? 'block' : 'none';
+    arrow.dataset.cubeIndex = AppState.windCubes.indexOf(cube);
+    
+    AppState.miniMap.container.appendChild(arrow);
+    AppState.miniMap.arrows.push(arrow);
+  },
+
+  clearArrows() {
+    AppState.miniMap.arrows.forEach(arrow => {
+      AppState.miniMap.container.removeChild(arrow);
+    });
+    AppState.miniMap.arrows = [];
+  },
+
+  updateArrowVisibility() {
+    AppState.miniMap.arrows.forEach(arrow => {
+      arrow.style.display = Config.settings.showWindArrows ? 'block' : 'none';
+    });
+  },
+
+  updateGroundPlane() {
+    if (!AppState.miniMap.groundPlane || !AppState.mapTexture) return;
+    
+    AppState.miniMap.groundPlane.material = new THREE.MeshLambertMaterial({ 
+      map: AppState.mapTexture,
+      color: 0xcccccc
+    });
+    
+    AppState.miniMap.groundPlane.material.emissive = new THREE.Color(0x111111);
+    AppState.miniMap.groundPlane.material.needsUpdate = true;
+  },
+
+  updateArrowPositions() {
+    const containerRect = AppState.miniMap.container.getBoundingClientRect();
+    const mapSize = containerRect.width - 8;
+    
+    AppState.miniMap.arrows.forEach(arrow => {
+      const cubeIndex = parseInt(arrow.dataset.cubeIndex);
+      const cube = AppState.windCubes[cubeIndex];
+      
+      if (cube && cube.userData.yLevel === AppState.selectedFlightLevel) {
+        const normalizedX = Utils.normalizeGridPosition(cube.position.x);
+        const normalizedZ = Utils.normalizeGridPosition(cube.position.z);
+        
+        const pixelX = normalizedX * mapSize;
+        const pixelZ = normalizedZ * mapSize;
+        
+        arrow.style.left = `${pixelX}px`;
+        arrow.style.top = `${pixelZ}px`;
+      }
+    });
+  },
+
+  onResizeStart(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    AppState.miniMap.isResizing = true;
+    
+    const containerRect = AppState.miniMap.container.getBoundingClientRect();
+    AppState.miniMap.resizeStartSize.width = containerRect.width;
+    AppState.miniMap.resizeStartSize.height = containerRect.height;
+    
+    if (event.type === 'mousedown') {
+      AppState.miniMap.resizeStartMouse.x = event.clientX;
+      AppState.miniMap.resizeStartMouse.y = event.clientY;
+      
+      document.addEventListener('mousemove', this.onResize.bind(this), true);
+      document.addEventListener('mouseup', this.onResizeEnd.bind(this), true);
+    } else if (event.type === 'touchstart') {
+      const touch = event.touches[0];
+      AppState.miniMap.resizeStartMouse.x = touch.clientX;
+      AppState.miniMap.resizeStartMouse.y = touch.clientY;
+      
+      document.addEventListener('touchmove', this.onResize.bind(this), { passive: false, capture: true });
+      document.addEventListener('touchend', this.onResizeEnd.bind(this), { capture: true });
+    }
+  },
+
+  onResize(event) {
+    if (!AppState.miniMap.isResizing) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    let clientX, clientY;
+    if (event.type === 'mousemove') {
+      clientX = event.clientX;
+      clientY = event.clientY;
+    } else if (event.type === 'touchmove') {
+      const touch = event.touches[0];
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    }
+    
+    const deltaX = clientX - AppState.miniMap.resizeStartMouse.x;
+    const deltaY = -(clientY - AppState.miniMap.resizeStartMouse.y);
+    const delta = Math.max(deltaX, deltaY);
+    
+    const isSmallScreen = window.innerWidth <= 768;
+    const minSize = isSmallScreen ? 120 : 150;
+    const maxSize = isSmallScreen ? 300 : 400;
+    
+    const newSize = Math.max(minSize, Math.min(maxSize, AppState.miniMap.resizeStartSize.width + delta));
+    
+    AppState.miniMap.container.style.width = newSize + 'px';
+    AppState.miniMap.container.style.height = newSize + 'px';
+    
+    AppState.miniMap.renderer.setSize(newSize - 8, newSize - 8);
+    
+    if (AppState.selectedFlightLevel !== null) {
+      this.updateArrowPositions();
+    }
+  },
+
+  onResizeEnd(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    AppState.miniMap.isResizing = false;
+    
+    document.removeEventListener('mousemove', this.onResize.bind(this), true);
+    document.removeEventListener('mouseup', this.onResizeEnd.bind(this), true);
+    document.removeEventListener('touchmove', this.onResize.bind(this), { passive: false, capture: true });
+    document.removeEventListener('touchend', this.onResizeEnd.bind(this), { capture: true });
+    
+    document.removeEventListener('mousemove', this.onResize.bind(this));
+    document.removeEventListener('mouseup', this.onResizeEnd.bind(this));
+    document.removeEventListener('touchmove', this.onResize.bind(this));
+    document.removeEventListener('touchend', this.onResizeEnd.bind(this));
+  }
+};
+
+// === LABELS MANAGEMENT ===
+const LabelsManager = {
+  create() {
+    this.createFlightLevelLabels();
+    this.createCompassLabels();
+  },
+
+  createFlightLevelLabels() {
+    for (let y = 0; y < CONSTANTS.FLIGHT_LEVELS.COUNT * CONSTANTS.GRID.SPACING; y += CONSTANTS.GRID.SPACING) {
+      const flightLevel = CONSTANTS.FLIGHT_LEVELS.MIN + ((y / CONSTANTS.GRID.SPACING) * CONSTANTS.FLIGHT_LEVELS.INCREMENT);
+      const flStr = String(flightLevel).padStart(3, '0');
+      this.createTextSprite(`FL${flStr}`, 11, y, 0);
+    }
+  },
+
+  createCompassLabels() {
+    this.createTextSprite('N', 0, 0, -11);
+    this.createTextSprite('S', 0, 0, 11);
+    this.createTextSprite('E', 11, 0, 0);
+    this.createTextSprite('W', -11, 0, 0);
+  },
+
+  createTextSprite(text, x, y, z) {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 256;
+    canvas.height = 64;
+    
+    context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    context.fillStyle = 'white';
+    context.font = '24px Geist, system-ui, sans-serif';
+    context.textAlign = 'center';
+    context.fillText(text, canvas.width / 2, 40);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(material);
+    
+    sprite.position.set(x, y, z);
+    sprite.scale.set(4, 1, 1);
+    AppState.scene.add(sprite);
+  }
+};
+
+// === ANIMATION LOOP ===
+const AnimationLoop = {
+  frameCount: 0,
+  
+  start() {
+    this.animate();
+  },
+
+  animate() {
+    requestAnimationFrame(this.animate.bind(this));
+    
+    AppState.controls.update();
+    
+    this.updateCubeOpacity();
+    this.animateArrows();
+    
+    // Update 3D arrow positions every 3 frames for better performance
+    this.frameCount++;
+    if (Config.settings.showWindArrows && AppState.selectedFlightLevel !== null && this.frameCount % 3 === 0) {
+      SelectionManager.updateArrowPositions();
+    }
+    
+    AppState.renderer.render(AppState.scene, AppState.camera);
+    
+    if (AppState.miniMap.renderer && AppState.selectedFlightLevel !== null) {
+      AppState.miniMap.renderer.render(AppState.miniMap.scene, AppState.miniMap.camera);
+    }
+  },
+
+  updateCubeOpacity() {
+    if (!AppState.isHovering && AppState.selectedFlightLevel === null) {
+      const cameraPosition = AppState.camera.position;
+      AppState.windCubes.forEach(cube => {
+        const distance = cameraPosition.distanceTo(cube.position);
+        const opacity = Math.max(0.02, Math.min(Config.settings.cubeOpacity, (80 - distance) / 80));
+        cube.material.opacity = opacity;
+      });
+    }
+  },
+
+  animateArrows() {
+    const time = Date.now() * 0.001;
+    
+    // Simplified: removed 3D arrow animation for better performance
+    // 3D arrows remain static while mini map arrows keep their animation
+    
+    AppState.miniMap.arrows.forEach((arrow, index) => {
+      if (!arrow.dataset.baseRotation) {
+        const currentTransform = arrow.style.transform;
+        const rotateMatch = currentTransform.match(/rotate\(([^)]+)deg\)/);
+        if (rotateMatch) {
+          arrow.dataset.baseRotation = rotateMatch[1];
+        }
+      }
+      
+      if (arrow.dataset.baseRotation) {
+        const baseRotation = parseFloat(arrow.dataset.baseRotation);
+        const oscillation = Math.sin(time * CONSTANTS.ANIMATION.OSCILLATION_SPEED + index * 0.2) * CONSTANTS.ANIMATION.MINI_MAP_OSCILLATION;
+        const newRotation = baseRotation + oscillation;
+        
+        const currentTransform = arrow.style.transform;
+        const newTransform = currentTransform.replace(
+          /rotate\([^)]+deg\)/,
+          `rotate(${newRotation}deg)`
+        );
+        arrow.style.transform = newTransform;
+      }
+    });
+  }
+};
+
+// === INITIALIZATION ===
+function initApp() {
+  SceneManager.init();
+  WindGenerator.generateGrid();
+  LabelsManager.create();
+  UIManager.init();
+  MiniMapManager.init();
+  EventHandlers.init();
+  AnimationLoop.start();
+}
+
+// Start the application
+initApp();
+</script>

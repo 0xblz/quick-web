@@ -1,0 +1,316 @@
+---
+layout: default
+title: scratch off
+description: scratch & reveal
+prototype: true
+---
+
+<style>
+  .scratch-container {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: crosshair;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 4px solid color(display-p3 1 1 1);
+  }
+
+  .diamond-reveal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    background-image: radial-gradient(circle, #0ea4e97e 1px, transparent 1px);
+    background-size: 20px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .diamond-image {
+    width: 150px;
+    height: 150px;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: relative;
+    z-index: 3;
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 1s ease-out, transform 1s ease-out;
+  }
+
+  .diamond-image.reveal {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .scratch-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: conic-gradient(from 180deg at 49.93% 50%, color(display-p3 0 0 0 / 0.61) 54.37500178813934deg, color(display-p3 1 1 1) 100.21212458610535deg, color(display-p3 0 0 0) 148.57314705848694deg, color(display-p3 1 1 1 / 0.99) 197.53795623779297deg, color(display-p3 0 0 0 / 0.96) 238.499493598938deg, color(display-p3 1 1 1 / 0.92) 280.0000047683716deg, color(display-p3 0 0 0) 328.0675935745239deg, color(display-p3 1 1 1) 360deg), conic-gradient(from 180deg at 49.93% 50%, color(display-p3 0 0 0) 54.37500178813934deg, color(display-p3 1 1 1) 100.21212458610535deg, color(display-p3 0 0 0) 148.57314705848694deg, color(display-p3 1 1 1) 197.53795623779297deg, color(display-p3 0 0 0) 238.499493598938deg, color(display-p3 1 1 1) 280.0000047683716deg, color(display-p3 0 0 0) 328.0675935745239deg, color(display-p3 1 1 1) 360deg), radial-gradient(215.73% 172.56% at 100% -13.53%, var(--Color-Sky-500, color(display-p3 0.0549 0.6471 0.9137)) 0%, var(--Color-Sky-50, color(display-p3 0.9412 0.9765 1)) 20%, var(--Color-Sky-300, color(display-p3 0.4902 0.8275 0.9882)) 40%, var(--Color-Sky-500, color(display-p3 0.0549 0.6471 0.9137)) 60%, var(--Color-Sky-200, color(display-p3 0.7294 0.902 0.9922)) 80%, var(--Color-Sky-500, color(display-p3 0.0549 0.6471 0.9137)) 100%);
+    background-blend-mode: lighten, soft-light, normal;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    display: none; /* Hide the CSS gradient since we're using canvas */
+  }
+
+  .scratch-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    cursor: crosshair;
+  }
+
+  .instructions {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .holo-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, 
+      rgba(14, 164, 233, 0.8) 0%, 
+      rgba(93, 155, 255, 0.6) 30%, 
+      rgba(51, 127, 234, 0.4) 60%, 
+      rgba(14, 164, 233, 0.2) 80%, 
+      transparent 100%);
+    filter: blur(20px);
+    animation: holoPulse 3s ease-in-out infinite;
+    z-index: 2;
+  }
+
+  .holo-glow::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      rgba(14, 164, 233, 0.6),
+      rgba(59, 130, 246, 0.6),
+      rgba(51, 66, 234, 0.6),
+      rgba(14, 164, 233, 0.6)
+    );
+    filter: blur(15px);
+    animation: holoRotate 4s linear infinite;
+  }
+
+  .holo-glow::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      rgba(255, 255, 255, 0.3) 0%,
+      rgba(14, 164, 233, 0.2) 50%,
+      transparent 100%);
+    filter: blur(10px);
+    animation: holoShimmer 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes holoPulse {
+    0%, 100% { 
+      opacity: 0.7; 
+      transform: translate(-50%, -50%) scale(1);
+    }
+    50% { 
+      opacity: 1; 
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+  }
+
+  @keyframes holoRotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  @keyframes holoShimmer {
+    0% { opacity: 0.3; transform: translate(-50%, -50%) scale(0.9); }
+    100% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.1); }
+  }
+</style>
+
+<div class="scratch-container">
+  <div class="diamond-reveal">
+    <div class="holo-glow"></div>
+    <img src="assets/images/diamond.png" alt="Diamond" class="diamond-image">
+  </div>
+  <div class="scratch-overlay" id="scratchOverlay"></div>
+  <canvas class="scratch-canvas" id="scratchCanvas"></canvas>
+  <div class="instructions">Scratch to reveal the diamond!</div>
+</div>
+
+<script>
+  class ScratchOff {
+    constructor() {
+      this.canvas = document.getElementById('scratchCanvas');
+      this.ctx = this.canvas.getContext('2d');
+      this.overlay = document.getElementById('scratchOverlay');
+      this.diamond = document.querySelector('.diamond-image');
+      this.isDrawing = false;
+      this.scratchedPixels = 0;
+      this.totalPixels = 0;
+      this.scratchThreshold = 0.6; // 60% needs to be scratched
+      this.hasShownAlert = false; // Prevent multiple alerts
+      this.hasStartedReveal = false; // Track if diamond reveal has started
+      
+      this.init();
+    }
+
+    init() {
+      this.resizeCanvas();
+      this.setupEventListeners();
+      this.drawInitialOverlay();
+    }
+
+    resizeCanvas() {
+      const rect = this.canvas.getBoundingClientRect();
+      this.canvas.width = rect.width;
+      this.canvas.height = rect.height;
+      this.totalPixels = this.canvas.width * this.canvas.height;
+    }
+
+    setupEventListeners() {
+      this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
+      this.canvas.addEventListener('mousemove', this.draw.bind(this));
+      this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
+      this.canvas.addEventListener('mouseleave', this.stopDrawing.bind(this));
+      
+      // Touch events for mobile
+      this.canvas.addEventListener('touchstart', this.handleTouch.bind(this));
+      this.canvas.addEventListener('touchmove', this.handleTouch.bind(this));
+      this.canvas.addEventListener('touchend', this.stopDrawing.bind(this));
+    }
+
+    handleTouch(e) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      
+      if (e.type === 'touchstart') {
+        this.startDrawing({ offsetX: x, offsetY: y });
+      } else if (e.type === 'touchmove') {
+        this.draw({ offsetX: x, offsetY: y });
+      }
+    }
+
+    startDrawing(e) {
+      this.isDrawing = true;
+      
+      // Trigger diamond reveal animation on first scratch
+      if (!this.hasStartedReveal) {
+        this.hasStartedReveal = true;
+        this.diamond.classList.add('reveal');
+      }
+      
+      this.draw(e);
+    }
+
+    stopDrawing() {
+      this.isDrawing = false;
+    }
+
+    draw(e) {
+      if (!this.isDrawing) return;
+
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.offsetX || e.clientX - rect.left;
+      const y = e.offsetY || e.clientY - rect.top;
+
+      this.ctx.globalCompositeOperation = 'destination-out';
+      this.ctx.lineWidth = 70;
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
+
+      this.ctx.lineTo(x, y);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, y);
+
+      this.checkScratchProgress();
+    }
+
+    drawInitialOverlay() {
+      // Draw the gradient pattern on the canvas initially
+      const gradient = this.ctx.createLinearGradient(0, 0, this.canvas.width, this.canvas.height);
+      gradient.addColorStop(0, '#00ABF5');
+      gradient.addColorStop(0.2, '#EBF9FF');
+      gradient.addColorStop(0.4, '#00D9FF');
+      gradient.addColorStop(0.6, '#00ABF5');
+      gradient.addColorStop(0.8, '#9DEAFF');
+      gradient.addColorStop(1, '#00ABF5');
+      
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    checkScratchProgress() {
+      const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+      const data = imageData.data;
+      let transparentPixels = 0;
+
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] === 0) { // Completely transparent pixels
+          transparentPixels++;
+        }
+      }
+
+      this.scratchedPixels = transparentPixels;
+      const scratchedPercentage = this.scratchedPixels / this.totalPixels;
+
+      // Show native alert when 30% is scratched
+      if (scratchedPercentage >= this.scratchThreshold && !this.hasShownAlert) {
+        this.hasShownAlert = true;
+        alert('Revealed!');
+      }
+    }
+  }
+
+  // Initialize when DOM is loaded
+  document.addEventListener('DOMContentLoaded', () => {
+    new ScratchOff();
+  });
+</script>
+
+
+
+
+

@@ -1,0 +1,18 @@
+---
+layout: default
+title: blaze.design
+description: prototypes
+is_home: true
+js_file: bg
+---
+<article class="box">
+  <h2>Prototypes</h2>
+  {% for page in site.pages %}
+    {% if page.path contains '.html' and page.path != 'index.html' and page.path != '404.html' and page.path != 'test.html' %}
+      <a class="list-item" href="{{ site.baseurl }}/{{ page.path | replace: '.html', '' }}">
+        {{ page.name | replace: '.html', '' | replace: '-', ' ' }} 
+        <small>{{ page.description }}</small>
+      </a>
+    {% endif %}
+  {% endfor %}
+</article>

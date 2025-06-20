@@ -1,0 +1,76 @@
+// blaze.design
+@import url('https://blaze.design/assets/css/main.css');
+
+// prototype page
+.prototype {
+    background: #111;
+    background-image: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 0.25rem,
+        rgba(255, 255, 255, 0.05) 0.25rem,
+        rgba(255, 255, 255, 0.05) 0.5rem
+    );
+    
+    &:after,
+    &:before {
+        display: none;
+    }
+}
+
+// article override
+article {
+    gap: 0;
+}
+
+// prototype preview
+.preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+    z-index: 3;
+    border: 4px solid white;
+    background-color: black;
+    background-size: 0.75rem 0.75rem;
+    max-width: var(--container-width);
+    width: 100%;
+    margin-top: 1.5rem;
+    overflow: hidden;
+}
+
+// dat.gui and acsset override
+.dg, .ac {
+    z-index: 9!important;
+}
+
+// list items
+a {
+    &.list-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.15s ease-in-out;
+        padding: 0.75rem 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.75rem;
+
+        &:hover,
+        &:active {
+            transform: translateY(-0.25rem);
+            border-color: white;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            position: relative;
+            box-shadow: 0.25rem 0.25rem 0 rgba(255, 255, 255, 0.2);
+            color: white;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+    }
+}
